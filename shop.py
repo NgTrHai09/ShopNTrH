@@ -11,7 +11,12 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 # LƯU Ý QUAN TRỌNG: SQLite sẽ bị mất dữ liệu khi deploy lên Vercel/Render gói Free.
 # Để chạy vĩnh viễn cần dùng PostgreSQL.
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'shop.db')
+# Lưu vào thư mục /tmp (Thư mục tạm thời)
+import os
+# ... (các import khác)
+
+# Dùng /tmp/shop.db thay vì shop.db
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/shop.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- KHỞI TẠO ---
@@ -477,3 +482,4 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
     app.run(host='0.0.0.0', port=5000)
+
