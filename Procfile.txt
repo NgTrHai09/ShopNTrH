@@ -1,1 +1,15 @@
-web: gunicorn app:app
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "shop.py",
+            "use": "@vercel/python"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "shop.py"
+        }
+    ]
+}
