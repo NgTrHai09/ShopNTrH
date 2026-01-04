@@ -1,13 +1,16 @@
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
-import requests 
+import requests
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'trh_cyberpunk_secret' 
 basedir = os.path.abspath(os.path.dirname(__file__))
+
+# LƯU Ý QUAN TRỌNG: SQLite sẽ bị mất dữ liệu khi deploy lên Vercel/Render gói Free.
+# Để chạy vĩnh viễn cần dùng PostgreSQL.
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'shop.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -18,6 +21,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # --- CẤU HÌNH ---
+# Bạn nên bảo mật Webhook này, không nên public
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1457372740381179994/dPNAMwShbts0IYmxQA-C8y7bCSm2BwAI2Yc1tqfSWYbjztE5zDehFRctCZGDaAIW7SSk"
 ADMIN_SECRET = "TRH_CONFIRM_2026"
 
@@ -29,6 +33,7 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(50), default="Member")
     is_banned = db.Column(db.Boolean, default=False)
 
+# Bộ nhớ tạm cho đơn hàng (Sẽ mất khi restart server)
 order_states = {}
 
 @login_manager.user_loader
@@ -262,7 +267,7 @@ def home():
                         method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ 
                             orderId: currentOrderId, 
-                            amount: document.getElementById("payAmount") ? document.getElementById("payAmount").innerText : "Checking...", 
+                            amount: 0, 
                             product: currentProduct 
                         })
                     });
@@ -448,7 +453,11 @@ def notify():
     data = request.json; oid = data['orderId']; order_states[oid] = 'pending'
     link = f"{request.host_url}admin/exec?oid={oid}&act=approve&sec={ADMIN_SECRET}&uid={current_user.id}"
     rej = f"{request.host_url}admin/exec?oid={oid}&act=reject&sec={ADMIN_SECRET}"
-    requests.post(DISCORD_WEBHOOK_URL, json={"content": f"**ĐƠN MỚI!**\nUser: {current_user.username}\nMã: `{oid}`\n[✅ DUYỆT]({link}) | [❌ TỪ CHỐI]({rej})"})
+    # Gửi thông báo về Discord (đã ẩn link trong biến)
+    try:
+        requests.post(DISCORD_WEBHOOK_URL, json={"content": f"**ĐƠN MỚI!**\nUser: {current_user.username}\nMã: `{oid}`\n[✅ DUYỆT]({link}) | [❌ TỪ CHỐI]({rej})"})
+    except:
+        pass
     return "OK"
 
 @app.route('/admin/exec')
@@ -457,7 +466,7 @@ def exec_order():
     oid = request.args.get('oid'); act = request.args.get('act')
     if act == 'approve':
         order_states[oid] = 'approved'
-        user = db.session.get(User, request.args.get('uid'))
+        user = db.session.get(User, int(request.args.get('uid')))
         if user and user.role != 'Dev': user.role = "VIP"; db.session.commit()
         return "<h1 style='color:lime; background:black; padding:50px; text-align:center; font-family:sans-serif'>✅ XÁC NHẬN THÀNH CÔNG!</h1>"
     else:
@@ -466,6 +475,5 @@ def exec_order():
 
 if __name__ == "__main__":
     with app.app_context():
-        # db.drop_all() # Reset DB nếu cần
         db.create_all()
     app.run(host='0.0.0.0', port=5000)
